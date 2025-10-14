@@ -1,0 +1,16 @@
+services:
+
+  pinger:
+    image: superlame
+    build:
+      context: .
+      args:
+        - OTP_VERSION
+    command: ["/opt/pinger/bin/pinger", "foreground"]
+    ports:
+      - 8080:8080
+    healthcheck:
+      test: ["CMD", "/opt/pinger/bin/pinger", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 5

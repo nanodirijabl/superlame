@@ -1,0 +1,14 @@
+-sname {{release_name}}
+-setcookie {{release_name}}_cookie
+
+-kernel inetrc '"erl_inetrc"'
+
++sbwt none
++sbwtdcpu none
++sbwtdio none
++swt very_low
++swtdcpu very_low
++swtdio very_low
+
+-start_epmd false
+-erl_epmd_port ${ERL_DIST_PORT}

@@ -1,0 +1,16 @@
+{application, bingobongo, [
+    {description, "A stupid bing-bong server"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        shareware,
+        cowboy
+    ]},
+    {mod, {bingobongo, []}},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.

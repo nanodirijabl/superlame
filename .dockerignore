@@ -1,0 +1,10 @@
+/_build/
+/.git/
+/.vscode/
+/.idea/
+/_checkouts/
+/_vendor/
+/.eunit
+/.rebar3
+erl_crash.dump
+rebar3.crashdump
