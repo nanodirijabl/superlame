@@ -6,11 +6,11 @@ services:
       context: .
       args:
         - OTP_VERSION
-    command: ["/opt/pinger/bin/pinger", "foreground"]
+    command: ["/app/pinger/bin/pinger", "foreground"]
     ports:
       - 8080:8080
     healthcheck:
-      test: ["CMD", "/opt/pinger/bin/pinger", "ping"]
+      test: ["CMD", "/app/pinger/bin/pinger", "ping"]
       interval: 2s
       timeout: 2s
       retries: 5

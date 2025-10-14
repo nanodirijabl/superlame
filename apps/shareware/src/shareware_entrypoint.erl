@@ -5,7 +5,12 @@
 start_link(Definition) ->
     start_link(Definition, shareware:new()).
 
-start_link(Definition, Container) ->
-    #{start := {supervisor, start_link, [shareware, Args]}} =
-        shareware:expand(Definition, Container),
-    supervisor:start_link(shareware, Args).
+start_link({definition, _} = Definition, Container) ->
+    do_start_link(shareware:expand(Definition, Container));
+start_link({child_spec, Spec}, _Container) ->
+    do_start_link(Spec).
+
+%%
+
+do_start_link(#{start := {Module, Function, Args}}) ->
+    erlang:apply(Module, Function, Args).

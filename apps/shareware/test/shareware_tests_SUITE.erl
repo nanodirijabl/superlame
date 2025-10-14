@@ -62,16 +62,16 @@ end_per_testcase(_Name, _C) ->
 
 -spec start_tree(config()) -> ok.
 start_tree(_C) ->
-    CI = shareware:new(#{
+    DI = shareware:new(#{
         ~"sup1" => one_for_all([
             shareware:ref(~"worker"), shareware:ref(~"sup2")
         ]),
         ~"sup2" => one_for_all([shareware:ref(~"worker")]),
         ~"worker" => worker()
     }),
-    #{start := {supervisor, start_link, [shareware, Args]}} =
-        shareware:get(~"sup1", CI),
-    {ok, Pid} = supervisor:start_link(shareware, Args),
+    {ok, Pid} = shareware_entrypoint:start_link(
+        {child_spec, shareware:get(~"sup1", DI)}
+    ),
     ok = proc_lib:stop(Pid),
     ok.
 

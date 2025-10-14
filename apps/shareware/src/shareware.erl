@@ -29,7 +29,8 @@
 }.
 
 -type child_id() :: term().
--type mfargs() :: {M :: module(), F :: atom(), A :: [term()] | undefined}.
+-type mfargs() ::
+    {Module :: module(), Function :: atom(), Args :: [term()] | undefined}.
 -type modules() :: [module()] | 'dynamic'.
 -type restart() :: 'permanent' | 'transient' | 'temporary'.
 -type significant() :: boolean().
@@ -123,9 +124,12 @@ find(ID, Container, Visited) ->
             Definition
     end.
 
-expand(ID, {child_spec, ChildSpec}, _Container, _Visited) ->
+expand(ID, {child_spec, ChildSpec}, Container, Visited) ->
     %% TODO Recursively expand start MFArgs' arguments list
-    ChildSpec#{id => child_spec_id(ID, ChildSpec)};
+    ChildSpec#{
+        id => child_spec_id(ID, ChildSpec),
+        start := expand_start_args(ChildSpec, Container, Visited)
+    };
 expand(
     ID,
     {definition, S = #{type := supervisor, args := {Flags, Children}}},
@@ -141,6 +145,34 @@ expand(
             ]},
         type => supervisor
     }.
+
+expand_start_args(#{start := {Module, Function, Args}}, Container, Visited) ->
+    {Module, Function, recursively_expand_list(Args, Container, Visited)}.
+
+recursively_expand_list([], _Container, _Visited) ->
+    [];
+recursively_expand_list(Args, Container, Visited) when is_list(Args) ->
+    F = fun
+        ({ref, ID}) ->
+            lists:member(ID, Visited) andalso
+                erlang:throw(
+                    {circular_reference_found, ID, lists:reverse(Visited)}
+                ),
+            get(ID, Container, Visited);
+        (V0) when is_map(V0) ->
+            {Keys, V1} = lists:unzip(maps:to_list(V0)),
+            V2 = recursively_expand_list(V1, Container, Visited),
+            maps:from_list(lists:zip(Keys, V2));
+        (V) when is_tuple(V) ->
+            list_to_tuple(
+                recursively_expand_list(tuple_to_list(V), Container, Visited)
+            );
+        (V) when is_list(V) ->
+            recursively_expand_list(V, Container, Visited);
+        (V) ->
+            V
+    end,
+    lists:map(F, Args).
 
 expand_children(Children, Container, Visited) ->
     F = fun
@@ -177,6 +209,10 @@ generate_service_id() ->
 
 -spec test() -> _.
 
+-define(sup_flags, #{strategy => one_for_all}).
+-define(stp_fixture, def(supervisor, {?sup_flags, []})).
+-define(sup_fixture(Children), def(supervisor, {?sup_flags, Children})).
+
 -spec def_test_() -> [_].
 def_test_() ->
     [
@@ -193,8 +229,8 @@ def_test_() ->
             def(my_mod, my_fun, [])
         ),
         ?_assertEqual(
-            {definition, #{type => supervisor, args => {sup_flags(), []}}},
-            def(supervisor, {sup_flags(), []})
+            {definition, #{type => supervisor, args => {?sup_flags, []}}},
+            def(supervisor, {?sup_flags, []})
         )
     ].
 
@@ -202,16 +238,16 @@ def_test_() ->
 set_test_() ->
     [
         ?_assertEqual(
-            #{<<"test">> => stp_fixture()},
-            set(<<"test">>, stp_fixture(), new())
+            #{~"test" => ?stp_fixture},
+            set(~"test", ?stp_fixture, new())
         ),
         ?_assertEqual(
             #{
-                <<"test1">> => stp_fixture(),
-                <<"test2">> => stp_fixture()
+                ~"test1" => ?stp_fixture,
+                ~"test2" => ?stp_fixture
             },
             set(
-                <<"test1">>, stp_fixture(), new(#{<<"test2">> => stp_fixture()})
+                ~"test1", ?stp_fixture, new(#{~"test2" => ?stp_fixture})
             )
         )
     ].
@@ -220,23 +256,23 @@ set_test_() ->
 get_not_found_test_() ->
     [
         ?_assertThrow(
-            {service_not_found, [<<"test">>]},
-            get(<<"test">>, new())
+            {service_not_found, [~"test"]},
+            get(~"test", new())
         ),
         ?_assertThrow(
-            {service_not_found, [<<"test">>]},
-            get(<<"test">>, new(#{<<"other">> => stp_fixture()}))
+            {service_not_found, [~"test"]},
+            get(~"test", new(#{~"other" => ?stp_fixture}))
         ),
         ?_assertThrow(
-            {service_not_found, [<<"root">>, <<"sup2">>]},
+            {service_not_found, [~"root", ~"sup2"]},
             get(
-                <<"root">>,
+                ~"root",
                 new(#{
-                    <<"root">> => def(
+                    ~"root" => def(
                         supervisor,
-                        {sup_flags(), [ref(<<"sup1">>), ref(<<"sup2">>)]}
+                        {?sup_flags, [ref(~"sup1"), ref(~"sup2")]}
                     ),
-                    <<"sup1">> => def(supervisor, {sup_flags(), []})
+                    ~"sup1" => def(supervisor, {?sup_flags, []})
                 })
             )
         )
@@ -245,64 +281,64 @@ get_not_found_test_() ->
 -spec get_circular_reference_found_test_() -> [_].
 get_circular_reference_found_test_() ->
     WCircularReference = new(#{
-        <<"A">> => sup_fixture([ref(<<"B">>)]),
-        <<"B">> => sup_fixture([ref(<<"C">>)]),
-        <<"C">> => sup_fixture([ref(<<"A">>)])
+        ~"A" => ?sup_fixture([ref(~"B")]),
+        ~"B" => ?sup_fixture([ref(~"C")]),
+        ~"C" => ?sup_fixture([ref(~"A")])
     }),
     [
         ?_assertThrow(
-            {circular_reference_found, <<"A">>, [<<"A">>, <<"B">>, <<"C">>]},
-            get(<<"A">>, WCircularReference)
+            {circular_reference_found, ~"A", [~"A", ~"B", ~"C"]},
+            get(~"A", WCircularReference)
         ),
         ?_assertThrow(
-            {circular_reference_found, <<"B">>, [<<"B">>, <<"C">>, <<"A">>]},
-            get(<<"B">>, WCircularReference)
+            {circular_reference_found, ~"B", [~"B", ~"C", ~"A"]},
+            get(~"B", WCircularReference)
         )
     ].
 
 -spec get_test_() -> [_].
 get_test_() ->
     Container = new(#{
-        <<"root">> => sup_fixture([ref(<<"sup1">>), ref(<<"sup2">>)]),
-        <<"sup1">> => sup_fixture([]),
-        <<"sup2">> => sup_fixture([ref(<<"worker1">>), ref(<<"sup3">>)]),
-        <<"sup3">> => sup_fixture([]),
-        <<"worker1">> => def(#{start => {my_mod, my_fun, []}})
+        ~"root" => ?sup_fixture([ref(~"sup1"), ref(~"sup2")]),
+        ~"sup1" => ?sup_fixture([]),
+        ~"sup2" => ?sup_fixture([ref(~"worker1"), ref(~"sup3")]),
+        ~"sup3" => ?sup_fixture([]),
+        ~"worker1" => def(#{start => {my_mod, my_fun, []}})
     }),
     [
         ?_assertEqual(
             #{
-                id => <<"root">>,
+                id => ~"root",
                 type => supervisor,
                 start =>
                     {supervisor, start_link, [
                         ?SUP,
-                        {sup_flags(), [
+                        {?sup_flags, [
                             #{
-                                id => <<"sup1">>,
+                                id => ~"sup1",
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        ?SUP, {sup_flags(), []}
+                                        ?SUP, {?sup_flags, []}
                                     ]}
                             },
                             #{
-                                id => <<"sup2">>,
+                                id => ~"sup2",
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
                                         ?SUP,
-                                        {sup_flags(), [
+                                        {?sup_flags, [
                                             #{
-                                                id => <<"worker1">>,
+                                                id => ~"worker1",
                                                 start => {my_mod, my_fun, []}
                                             },
                                             #{
-                                                id => <<"sup3">>,
+                                                id => ~"sup3",
                                                 type => supervisor,
                                                 start =>
                                                     {supervisor, start_link, [
-                                                        ?SUP, {sup_flags(), []}
+                                                        ?SUP, {?sup_flags, []}
                                                     ]}
                                             }
                                         ]}
@@ -311,17 +347,58 @@ get_test_() ->
                         ]}
                     ]}
             },
-            get(<<"root">>, Container)
+            get(~"root", Container)
         )
     ].
 
-stp_fixture() ->
-    def(supervisor, {sup_flags(), []}).
-
-sup_fixture(Children) ->
-    def(supervisor, {sup_flags(), Children}).
-
-sup_flags() ->
-    #{strategy => one_for_all}.
+-spec get_with_args_expansion_test_() -> [_].
+get_with_args_expansion_test_() ->
+    Container = new(#{
+        root => ?sup_fixture([ref({worker, 1})]),
+        {worker, 1} => def(#{
+            start =>
+                {my_mod, my_fun, [
+                    ref({nested, 1}),
+                    [
+                        foo,
+                        [ref({nested, 1})],
+                        bar,
+                        {reference, ref({nested, 1}), #{
+                            foo => bar,
+                            baz => ref({nested, 1})
+                        }}
+                    ]
+                ]}
+        }),
+        {nested, 1} => ?stp_fixture
+    }),
+    Nested = get({nested, 1}, Container),
+    [
+        ?_assertMatch(
+            #{
+                start :=
+                    {supervisor, start_link, [
+                        _Sup,
+                        {_SupFlags, [
+                            #{
+                                start :=
+                                    {my_mod, my_fun, [
+                                        Nested,
+                                        [
+                                            foo,
+                                            [Nested],
+                                            bar,
+                                            {reference, Nested, #{
+                                                foo := bar, baz := Nested
+                                            }}
+                                        ]
+                                    ]}
+                            }
+                        ]}
+                    ]}
+            },
+            get(root, Container)
+        )
+    ].
 
 -endif.

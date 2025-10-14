@@ -24,11 +24,11 @@ ENV ERL_DIST_PORT=31337
 ENV CHARSET=UTF-8
 ENV LANG=C.UTF-8
 
-COPY --from=builder /build/_build/default/rel/ /opt/
+COPY --from=builder /build/_build/default/rel/ /app/
 
 RUN groupadd --gid ${USER_GID} ${USER_NAME} && \
     useradd --uid ${USER_UID} --gid ${USER_GID} -M ${USER_NAME} && \
-    chown -R ${USER_UID}:${USER_GID} /opt
+    chown -R ${USER_UID}:${USER_GID} /app
 
 USER ${USER_NAME}
 
