@@ -13,13 +13,6 @@
 
 %%
 
--behaviour(supervisor).
--export([init/1]).
-
--type supervisor_opts() :: {supervisor:sup_flags(), [supervisor:child_spec()]}.
-
-%%
-
 -type entry_id() :: term().
 -type entry_reference() :: {'$ref', entry_id()}.
 
@@ -62,14 +55,6 @@
 
 -type container() :: #{entry_id() => entry_definition()}.
 -type entry() :: term().
-
-%%
-
--define(SUP, ?MODULE).
-
--spec init(supervisor_opts()) -> {ok, supervisor_opts()}.
-init({Flags, Specs}) ->
-    {ok, {Flags, Specs}}.
 
 %%
 
@@ -161,7 +146,7 @@ expand(
         type => supervisor,
         start =>
             {supervisor, start_link, [
-                ?SUP,
+                shareware_supervisor,
                 {Flags,
                     expand_supervisor_children(Children, Container, [
                         ID | Visited
@@ -351,14 +336,15 @@ get_test_() ->
                 type => supervisor,
                 start =>
                     {supervisor, start_link, [
-                        ?SUP,
+                        shareware_supervisor,
                         {?sup_flags, [
                             #{
                                 id => ~"sup1",
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        ?SUP, {?sup_flags, []}
+                                        shareware_supervisor,
+                                        {?sup_flags, []}
                                     ]}
                             },
                             #{
@@ -366,7 +352,7 @@ get_test_() ->
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        ?SUP,
+                                        shareware_supervisor,
                                         {?sup_flags, [
                                             #{
                                                 id => ~"worker1",
@@ -377,7 +363,8 @@ get_test_() ->
                                                 type => supervisor,
                                                 start =>
                                                     {supervisor, start_link, [
-                                                        ?SUP, {?sup_flags, []}
+                                                        shareware_supervisor,
+                                                        {?sup_flags, []}
                                                     ]}
                                             }
                                         ]}
