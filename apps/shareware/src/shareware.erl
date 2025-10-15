@@ -1,230 +1,60 @@
 -module(shareware).
 
--export([ref/1]).
--export([expand/1, expand/2]).
-
--export([factory/1, factory/2]).
--export([value/1]).
--export([def/1, def/2, def/3]).
+-include("definitions.hrl").
 
 -export([new/0, new/1]).
 -export([set/3]).
 -export([get/2]).
 
-%%
-
--type entry_id() :: term().
--type entry_reference() :: {'$ref', entry_id()}.
+-export([ref/1]).
+-export([factory/1, factory/2]).
+-export([value/1]).
+-export([def/1, def/2, def/3]).
 
 -type standard_type() ::
     supervisor.
--type standard_args() :: term().
--type standard_spec() :: #{
-    type := standard_type(),
-    args := standard_args(),
-    id => term()
-}.
 
--type child_id() :: term().
--type mfargs() ::
-    {Module :: module(), Function :: atom(), Args :: [term()] | undefined}.
--type modules() :: [module()] | 'dynamic'.
--type restart() :: 'permanent' | 'transient' | 'temporary'.
--type significant() :: boolean().
--type shutdown() :: 'brutal_kill' | timeout().
--type worker() :: 'worker' | 'supervisor'.
+new() ->
+    shareware_container:new().
 
-%% NOTE Child specs like in supervisor but id is optional.
-%% See `supervisor:child_spec/0'.
--type child_spec() :: #{
-    id => child_id(),
-    start := mfargs(),
-    restart => restart(),
-    significant => significant(),
-    shutdown => shutdown(),
-    type => worker(),
-    modules => modules()
-}.
+new(Definitions) ->
+    shareware_container:new(Definitions).
 
--type entry_definition() ::
-    {'$child_spec', child_spec()}
-    | {'$definition', standard_spec()}
-    | {'$factory',
-        fun(() -> any()) | fun((container()) -> any()) | {function(), [term()]}}
-    | {'$value', term()}.
+set(ID, Definition, Container) ->
+    shareware_container:set(ID, Definition, Container).
 
--type container() :: #{entry_id() => entry_definition()}.
--type entry() :: term().
+get(ID, Container) ->
+    shareware_container:get(ID, Container).
 
-%%
+-spec factory(shareware_definition_factory:t()) -> shareware_definition:t().
+factory(Spec) ->
+    shareware_definition:new(shareware_definition_factory, Spec).
 
--spec factory(fun(() -> any()) | fun((container()) -> any())) ->
-    entry_definition().
-factory(Fun) when is_function(Fun, 0) orelse is_function(Fun, 1) ->
-    {'$factory', Fun}.
-
--spec factory(function(), [term()]) -> entry_definition().
+-spec factory(function(), [term()]) -> shareware_definition:t().
 factory(Fun, Args) when is_list(Args) andalso is_function(Fun, length(Args)) ->
-    {'$factory', {Fun, Args}}.
+    shareware_definition:new(shareware_definition_factory, {Fun, Args}).
 
--spec value(term()) -> entry_definition().
+-spec value(shareware_definition_term:t()) -> shareware_definition:t().
 value(Value) ->
-    {'$value', Value}.
+    shareware_definition:new(shareware_definition_term, Value).
 
--spec def(child_spec()) -> entry_definition().
-def(Spec = #{start := _MFArgs}) ->
-    {'$child_spec', Spec}.
+-spec def(shareware_definition_child_spec:t()) -> shareware_definition:t().
+def(Spec) ->
+    shareware_definition:new(shareware_definition_child_spec, Spec).
 
--spec def(standard_type(), standard_args()) -> entry_definition().
-def(supervisor, Args) ->
-    {'$definition', #{type => supervisor, args => Args}}.
+-spec def(standard_type(), shareware_definition_supervisor:t()) ->
+    shareware_definition:t().
+def(supervisor, Spec) ->
+    shareware_definition:new(shareware_definition_supervisor, Spec).
 
--spec def(module(), atom(), [term()]) -> entry_definition().
+-spec def(module(), atom(), [term()]) -> shareware_definition:t().
 def(Mod, Fun, Args) when
     is_atom(Mod) andalso is_atom(Fun) andalso is_list(Args)
 ->
     def(#{start => {Mod, Fun, Args}}).
 
--spec ref(entry_id()) -> entry_reference().
 ref(ID) ->
-    {'$ref', ID}.
-
--spec new() -> container().
-new() ->
-    #{}.
-
--spec new(#{entry_id() => entry_definition()}) -> container().
-new(Definitions) ->
-    Definitions.
-
--spec set(entry_id(), entry_definition(), container()) ->
-    container().
-set(ID, Definition, Container) ->
-    %% TODO Assert id and definition are valid
-    maps:put(ID, Definition, Container).
-
--spec get(entry_id(), container()) -> entry().
-get(ID, Container) ->
-    get(ID, Container, []).
-
--spec expand(entry_definition()) -> entry().
-expand(Definition) ->
-    expand(undefined, Definition, new(), []).
-
--spec expand(entry_definition(), container()) -> entry().
-expand(Definition, Container) ->
-    expand(undefined, Definition, Container, []).
-
-%%
-
-get(ID, Container, Visited) ->
-    Definition = find(ID, Container, Visited),
-    expand(ID, Definition, Container, Visited).
-
-find(ID, Container, Visited) ->
-    case maps:get(ID, Container, undefined) of
-        undefined ->
-            erlang:throw({entry_not_found, lists:reverse([ID | Visited])});
-        Definition ->
-            Definition
-    end.
-
-expand(ID, {'$child_spec', ChildSpec}, Container, Visited) ->
-    %% TODO Recursively expand start MFArgs' arguments list
-    ChildSpec#{
-        id => child_spec_id(ID, ChildSpec),
-        start := expand_start_args(ChildSpec, Container, Visited)
-    };
-expand(
-    ID,
-    {'$definition', #{type := supervisor, args := {Flags, Children}} = Spec},
-    Container,
-    Visited
-) ->
-    #{
-        id => child_spec_id(ID, Spec),
-        type => supervisor,
-        start =>
-            {supervisor, start_link, [
-                shareware_supervisor,
-                {Flags,
-                    expand_supervisor_children(Children, Container, [
-                        ID | Visited
-                    ])}
-            ]}
-    };
-expand(_ID, {'$factory', Fun}, Container, Visited) when is_function(Fun, 0) ->
-    expand_value(Fun(), Container, Visited);
-expand(_ID, {'$factory', Fun}, Container, Visited) when is_function(Fun, 1) ->
-    expand_value(Fun(Container), Container, Visited);
-expand(_ID, {'$factory', {Fun, Args}}, Container, Visited) when
-    is_list(Args) andalso is_function(Fun, length(Args))
-->
-    expand_value(erlang:apply(Fun, Args), Container, Visited);
-expand(_ID, {'$value', Value}, Container, Visited) ->
-    expand_value(Value, Container, Visited).
-
-expand_start_args(#{start := {Module, Function, Args}}, Container, Visited) ->
-    {Module, Function, recursively_expand_list(Args, Container, Visited)}.
-
-recursively_expand_list([], _Container, _Visited) ->
-    [];
-recursively_expand_list(Args, Container, Visited) when is_list(Args) ->
-    F = fun
-        ({'$ref', ID}) ->
-            lists:member(ID, Visited) andalso
-                erlang:throw(
-                    {circular_reference_found, ID, lists:reverse(Visited)}
-                ),
-            get(ID, Container, Visited);
-        (V0) when is_map(V0) ->
-            {Keys, V1} = lists:unzip(maps:to_list(V0)),
-            V2 = recursively_expand_list(V1, Container, Visited),
-            maps:from_list(lists:zip(Keys, V2));
-        (V) when is_tuple(V) ->
-            list_to_tuple(
-                recursively_expand_list(tuple_to_list(V), Container, Visited)
-            );
-        (V) when is_list(V) ->
-            recursively_expand_list(V, Container, Visited);
-        (V) ->
-            V
-    end,
-    lists:map(F, Args).
-
-expand_supervisor_children(Children, Container, Visited) ->
-    F = fun
-        ({'$ref', ID}) ->
-            lists:member(ID, Visited) andalso
-                erlang:throw(
-                    {circular_reference_found, ID, lists:reverse(Visited)}
-                ),
-            get(ID, Container, Visited);
-        ({'$child_spec', _} = Definition) ->
-            expand(undefined, Definition, Container, Visited);
-        ({'$definition', _} = Definition) ->
-            expand(undefined, Definition, Container, Visited);
-        ({'$factory', _} = Definition) ->
-            erlang:throw({bad_spec, Definition});
-        ({'$value', _} = Definition) ->
-            erlang:throw({bad_spec, Definition});
-        (PlainChildSpec) ->
-            PlainChildSpec
-    end,
-    lists:map(F, Children).
-
-expand_value(Value, Container, Visited) ->
-    hd(recursively_expand_list([Value], Container, Visited)).
-
-child_spec_id(_EntryID, #{id := ID}) ->
-    ID;
-child_spec_id(undefined, _STPSpec) ->
-    generate_entry_id();
-child_spec_id(EntryID, _STPSpec) ->
-    EntryID.
-
-generate_entry_id() ->
-    {entry, make_ref()}.
+    shareware_definition:ref(ID).
 
 %%
 
@@ -234,27 +64,37 @@ generate_entry_id() ->
 -spec test() -> _.
 
 -define(sup_flags, #{strategy => one_for_all}).
--define(stp_fixture, def(supervisor, {?sup_flags, []})).
--define(sup_fixture(Children), def(supervisor, {?sup_flags, Children})).
+-define(stp_fixture, def(supervisor, #{flags => ?sup_flags, children => []})).
+-define(sup_fixture(Children),
+    def(supervisor, #{flags => ?sup_flags, children => Children})
+).
 
 -spec def_test_() -> [_].
 def_test_() ->
     [
         ?_assertEqual(
-            {'$child_spec', #{id => test, start => {my_mod, my_fun, []}}},
+            ?DEFINITION(shareware_definition_child_spec, #{
+                id => test, start => {my_mod, my_fun, []}
+            }),
             def(#{id => test, start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            {'$child_spec', #{start => {my_mod, my_fun, []}}},
+            ?DEFINITION(shareware_definition_child_spec, #{
+                start => {my_mod, my_fun, []}
+            }),
             def(#{start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            {'$child_spec', #{start => {my_mod, my_fun, []}}},
+            ?DEFINITION(shareware_definition_child_spec, #{
+                start => {my_mod, my_fun, []}
+            }),
             def(my_mod, my_fun, [])
         ),
         ?_assertEqual(
-            {'$definition', #{type => supervisor, args => {?sup_flags, []}}},
-            def(supervisor, {?sup_flags, []})
+            ?DEFINITION(shareware_definition_supervisor, #{
+                flags => ?sup_flags, children => []
+            }),
+            def(supervisor, #{flags => ?sup_flags, children => []})
         )
     ].
 
@@ -280,23 +120,28 @@ set_test_() ->
 get_not_found_test_() ->
     [
         ?_assertThrow(
-            {entry_not_found, [~"test"]},
+            {not_found, ~"test", []},
             get(~"test", new())
         ),
         ?_assertThrow(
-            {entry_not_found, [~"test"]},
+            {not_found, ~"test", []},
             get(~"test", new(#{~"other" => ?stp_fixture}))
         ),
         ?_assertThrow(
-            {entry_not_found, [~"root", ~"sup2"]},
+            {not_found, ~"sup2", [~"root"]},
             get(
                 ~"root",
                 new(#{
                     ~"root" => def(
                         supervisor,
-                        {?sup_flags, [ref(~"sup1"), ref(~"sup2")]}
+                        #{
+                            flags => ?sup_flags,
+                            children => [ref(~"sup1"), ref(~"sup2")]
+                        }
                     ),
-                    ~"sup1" => def(supervisor, {?sup_flags, []})
+                    ~"sup1" => def(supervisor, #{
+                        flags => ?sup_flags, children => []
+                    })
                 })
             )
         )
@@ -311,11 +156,11 @@ get_circular_reference_found_test_() ->
     }),
     [
         ?_assertThrow(
-            {circular_reference_found, ~"A", [~"A", ~"B", ~"C"]},
+            {circular_reference_found, ~"A", [~"C", ~"B", ~"A"]},
             get(~"A", WCircularReference)
         ),
         ?_assertThrow(
-            {circular_reference_found, ~"B", [~"B", ~"C", ~"A"]},
+            {circular_reference_found, ~"B", [~"A", ~"C", ~"B"]},
             get(~"B", WCircularReference)
         )
     ].
@@ -336,14 +181,14 @@ get_test_() ->
                 type => supervisor,
                 start =>
                     {supervisor, start_link, [
-                        shareware_supervisor,
+                        shareware_definition_supervisor,
                         {?sup_flags, [
                             #{
                                 id => ~"sup1",
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        shareware_supervisor,
+                                        shareware_definition_supervisor,
                                         {?sup_flags, []}
                                     ]}
                             },
@@ -352,7 +197,7 @@ get_test_() ->
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        shareware_supervisor,
+                                        shareware_definition_supervisor,
                                         {?sup_flags, [
                                             #{
                                                 id => ~"worker1",
@@ -363,7 +208,7 @@ get_test_() ->
                                                 type => supervisor,
                                                 start =>
                                                     {supervisor, start_link, [
-                                                        shareware_supervisor,
+                                                        shareware_definition_supervisor,
                                                         {?sup_flags, []}
                                                     ]}
                                             }

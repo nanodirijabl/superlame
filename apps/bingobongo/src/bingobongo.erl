@@ -10,7 +10,9 @@
 -export([init/2, terminate/3]).
 
 -define(supervise(Children),
-    shareware:def(supervisor, {#{strategy => one_for_all}, Children})
+    shareware:def(supervisor, #{
+        flags => #{strategy => one_for_all}, children => Children
+    })
 ).
 -define(bings_accountant,
     shareware:def(gen_server, start_link, [
