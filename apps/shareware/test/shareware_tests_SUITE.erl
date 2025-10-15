@@ -60,48 +60,45 @@ end_per_testcase(_Name, _C) ->
 
 %%
 
+-define(one_for_all(Children),
+    shareware:def(supervisor, {#{strategy => one_for_all}, Children})
+).
+-define(worker, shareware:def(gen_server, start_link, [?MODULE, [], []])).
+
 -spec start_tree(config()) -> ok.
 start_tree(_C) ->
     DI = shareware:new(#{
-        ~"sup1" => one_for_all([
+        ~"sup1" => ?one_for_all([
             shareware:ref(~"worker"), shareware:ref(~"sup2")
         ]),
-        ~"sup2" => one_for_all([shareware:ref(~"worker")]),
-        ~"worker" => worker()
+        ~"sup2" => ?one_for_all([shareware:ref(~"worker")]),
+        ~"worker" => ?worker
     }),
     {ok, Pid} = shareware_entrypoint:start_link(
-        {child_spec, shareware:get(~"sup1", DI)}
+        {'$child_spec', shareware:get(~"sup1", DI)}
     ),
     ok = proc_lib:stop(Pid),
     ok.
 
 -spec start_tree_inlined(config()) -> ok.
 start_tree_inlined(_C) ->
-    Definition = one_for_all([
-        worker(),
-        one_for_all([
-            worker(),
-            one_for_all([
-                worker(),
-                worker(),
-                one_for_all([
-                    worker()
+    Definition = ?one_for_all([
+        ?worker,
+        ?one_for_all([
+            ?worker,
+            ?one_for_all([
+                ?worker,
+                ?worker,
+                ?one_for_all([
+                    ?worker
                 ]),
-                worker()
+                ?worker
             ])
         ])
     ]),
     {ok, Pid} = shareware_entrypoint:start_link(Definition),
     ok = proc_lib:stop(Pid),
     ok.
-
-%%
-
-one_for_all(Children) ->
-    shareware:def(supervisor, {#{strategy => one_for_all}, Children}).
-
-worker() ->
-    shareware:def(gen_server, start_link, [?MODULE, [], []]).
 
 %%
 

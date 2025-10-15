@@ -3,6 +3,8 @@
 -export([ref/1]).
 -export([expand/1, expand/2]).
 
+-export([factory/1, factory/2]).
+-export([value/1]).
 -export([def/1, def/2, def/3]).
 
 -export([new/0, new/1]).
@@ -14,17 +16,19 @@
 -behaviour(supervisor).
 -export([init/1]).
 
--type sup_opts() :: {supervisor:sup_flags(), [supervisor:child_spec()]}.
+-type supervisor_opts() :: {supervisor:sup_flags(), [supervisor:child_spec()]}.
 
 %%
 
--type service_id() :: term().
--type service_reference() :: {ref, service_id()}.
--type stp_type() :: supervisor.
--type stp_args() :: term().
--type stp_spec() :: #{
-    type := stp_type(),
-    args := stp_args(),
+-type entry_id() :: term().
+-type entry_reference() :: {'$ref', entry_id()}.
+
+-type standard_type() ::
+    supervisor.
+-type standard_args() :: term().
+-type standard_spec() :: #{
+    type := standard_type(),
+    args := standard_args(),
     id => term()
 }.
 
@@ -49,64 +53,80 @@
     modules => modules()
 }.
 
--type service_definition() ::
-    {child_spec, child_spec()}
-    | {definition, stp_spec()}.
+-type entry_definition() ::
+    {'$child_spec', child_spec()}
+    | {'$definition', standard_spec()}
+    | {'$factory',
+        fun(() -> any()) | fun((container()) -> any()) | {function(), [term()]}}
+    | {'$value', term()}.
 
--type service_container() :: #{service_id() => service_definition()}.
--type service() :: supervisor:child_spec().
+-type container() :: #{entry_id() => entry_definition()}.
+-type entry() :: term().
 
 %%
 
 -define(SUP, ?MODULE).
 
--spec init(sup_opts()) -> {ok, sup_opts()}.
+-spec init(supervisor_opts()) -> {ok, supervisor_opts()}.
 init({Flags, Specs}) ->
     {ok, {Flags, Specs}}.
 
 %%
 
--spec def(child_spec()) -> service_definition().
+-spec factory(fun(() -> any()) | fun((container()) -> any())) ->
+    entry_definition().
+factory(Fun) when is_function(Fun, 0) orelse is_function(Fun, 1) ->
+    {'$factory', Fun}.
+
+-spec factory(function(), [term()]) -> entry_definition().
+factory(Fun, Args) when is_list(Args) andalso is_function(Fun, length(Args)) ->
+    {'$factory', {Fun, Args}}.
+
+-spec value(term()) -> entry_definition().
+value(Value) ->
+    {'$value', Value}.
+
+-spec def(child_spec()) -> entry_definition().
 def(Spec = #{start := _MFArgs}) ->
-    {child_spec, Spec}.
+    {'$child_spec', Spec}.
 
--spec def(stp_type(), stp_args()) -> service_definition().
+-spec def(standard_type(), standard_args()) -> entry_definition().
 def(supervisor, Args) ->
-    {definition, #{type => supervisor, args => Args}}.
+    {'$definition', #{type => supervisor, args => Args}}.
 
--spec def(module(), atom(), [term()]) -> service_definition().
+-spec def(module(), atom(), [term()]) -> entry_definition().
 def(Mod, Fun, Args) when
     is_atom(Mod) andalso is_atom(Fun) andalso is_list(Args)
 ->
     def(#{start => {Mod, Fun, Args}}).
 
--spec ref(service_id()) -> service_reference().
+-spec ref(entry_id()) -> entry_reference().
 ref(ID) ->
-    {ref, ID}.
+    {'$ref', ID}.
 
--spec new() -> service_container().
+-spec new() -> container().
 new() ->
     #{}.
 
--spec new(#{service_id() => service_definition()}) -> service_container().
+-spec new(#{entry_id() => entry_definition()}) -> container().
 new(Definitions) ->
     Definitions.
 
--spec set(service_id(), service_definition(), service_container()) ->
-    service_container().
+-spec set(entry_id(), entry_definition(), container()) ->
+    container().
 set(ID, Definition, Container) ->
     %% TODO Assert id and definition are valid
     maps:put(ID, Definition, Container).
 
--spec get(service_id(), service_container()) -> service().
+-spec get(entry_id(), container()) -> entry().
 get(ID, Container) ->
     get(ID, Container, []).
 
--spec expand(service_definition()) -> service().
+-spec expand(entry_definition()) -> entry().
 expand(Definition) ->
     expand(undefined, Definition, new(), []).
 
--spec expand(service_definition(), service_container()) -> service().
+-spec expand(entry_definition(), container()) -> entry().
 expand(Definition, Container) ->
     expand(undefined, Definition, Container, []).
 
@@ -119,12 +139,12 @@ get(ID, Container, Visited) ->
 find(ID, Container, Visited) ->
     case maps:get(ID, Container, undefined) of
         undefined ->
-            erlang:throw({service_not_found, lists:reverse([ID | Visited])});
+            erlang:throw({entry_not_found, lists:reverse([ID | Visited])});
         Definition ->
             Definition
     end.
 
-expand(ID, {child_spec, ChildSpec}, Container, Visited) ->
+expand(ID, {'$child_spec', ChildSpec}, Container, Visited) ->
     %% TODO Recursively expand start MFArgs' arguments list
     ChildSpec#{
         id => child_spec_id(ID, ChildSpec),
@@ -132,19 +152,32 @@ expand(ID, {child_spec, ChildSpec}, Container, Visited) ->
     };
 expand(
     ID,
-    {definition, S = #{type := supervisor, args := {Flags, Children}}},
+    {'$definition', #{type := supervisor, args := {Flags, Children}} = Spec},
     Container,
     Visited
 ) ->
     #{
-        id => child_spec_id(ID, S),
+        id => child_spec_id(ID, Spec),
+        type => supervisor,
         start =>
             {supervisor, start_link, [
                 ?SUP,
-                {Flags, expand_children(Children, Container, [ID | Visited])}
-            ]},
-        type => supervisor
-    }.
+                {Flags,
+                    expand_supervisor_children(Children, Container, [
+                        ID | Visited
+                    ])}
+            ]}
+    };
+expand(_ID, {'$factory', Fun}, Container, Visited) when is_function(Fun, 0) ->
+    expand_value(Fun(), Container, Visited);
+expand(_ID, {'$factory', Fun}, Container, Visited) when is_function(Fun, 1) ->
+    expand_value(Fun(Container), Container, Visited);
+expand(_ID, {'$factory', {Fun, Args}}, Container, Visited) when
+    is_list(Args) andalso is_function(Fun, length(Args))
+->
+    expand_value(erlang:apply(Fun, Args), Container, Visited);
+expand(_ID, {'$value', Value}, Container, Visited) ->
+    expand_value(Value, Container, Visited).
 
 expand_start_args(#{start := {Module, Function, Args}}, Container, Visited) ->
     {Module, Function, recursively_expand_list(Args, Container, Visited)}.
@@ -153,7 +186,7 @@ recursively_expand_list([], _Container, _Visited) ->
     [];
 recursively_expand_list(Args, Container, Visited) when is_list(Args) ->
     F = fun
-        ({ref, ID}) ->
+        ({'$ref', ID}) ->
             lists:member(ID, Visited) andalso
                 erlang:throw(
                     {circular_reference_found, ID, lists:reverse(Visited)}
@@ -174,33 +207,39 @@ recursively_expand_list(Args, Container, Visited) when is_list(Args) ->
     end,
     lists:map(F, Args).
 
-expand_children(Children, Container, Visited) ->
+expand_supervisor_children(Children, Container, Visited) ->
     F = fun
-        ({ref, ID}) ->
+        ({'$ref', ID}) ->
             lists:member(ID, Visited) andalso
                 erlang:throw(
                     {circular_reference_found, ID, lists:reverse(Visited)}
                 ),
             get(ID, Container, Visited);
-        (Definition) when
-            element(1, Definition) =:= child_spec orelse
-                element(1, Definition) =:= definition
-        ->
+        ({'$child_spec', _} = Definition) ->
             expand(undefined, Definition, Container, Visited);
-        (ChildSpec) ->
-            ChildSpec
+        ({'$definition', _} = Definition) ->
+            expand(undefined, Definition, Container, Visited);
+        ({'$factory', _} = Definition) ->
+            erlang:throw({bad_spec, Definition});
+        ({'$value', _} = Definition) ->
+            erlang:throw({bad_spec, Definition});
+        (PlainChildSpec) ->
+            PlainChildSpec
     end,
     lists:map(F, Children).
 
-child_spec_id(_ServiceID, #{id := ID}) ->
+expand_value(Value, Container, Visited) ->
+    hd(recursively_expand_list([Value], Container, Visited)).
+
+child_spec_id(_EntryID, #{id := ID}) ->
     ID;
 child_spec_id(undefined, _STPSpec) ->
-    generate_service_id();
-child_spec_id(ServiceID, _STPSpec) ->
-    ServiceID.
+    generate_entry_id();
+child_spec_id(EntryID, _STPSpec) ->
+    EntryID.
 
-generate_service_id() ->
-    {service, make_ref()}.
+generate_entry_id() ->
+    {entry, make_ref()}.
 
 %%
 
@@ -217,19 +256,19 @@ generate_service_id() ->
 def_test_() ->
     [
         ?_assertEqual(
-            {child_spec, #{id => test, start => {my_mod, my_fun, []}}},
+            {'$child_spec', #{id => test, start => {my_mod, my_fun, []}}},
             def(#{id => test, start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            {child_spec, #{start => {my_mod, my_fun, []}}},
+            {'$child_spec', #{start => {my_mod, my_fun, []}}},
             def(#{start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            {child_spec, #{start => {my_mod, my_fun, []}}},
+            {'$child_spec', #{start => {my_mod, my_fun, []}}},
             def(my_mod, my_fun, [])
         ),
         ?_assertEqual(
-            {definition, #{type => supervisor, args => {?sup_flags, []}}},
+            {'$definition', #{type => supervisor, args => {?sup_flags, []}}},
             def(supervisor, {?sup_flags, []})
         )
     ].
@@ -256,15 +295,15 @@ set_test_() ->
 get_not_found_test_() ->
     [
         ?_assertThrow(
-            {service_not_found, [~"test"]},
+            {entry_not_found, [~"test"]},
             get(~"test", new())
         ),
         ?_assertThrow(
-            {service_not_found, [~"test"]},
+            {entry_not_found, [~"test"]},
             get(~"test", new(#{~"other" => ?stp_fixture}))
         ),
         ?_assertThrow(
-            {service_not_found, [~"root", ~"sup2"]},
+            {entry_not_found, [~"root", ~"sup2"]},
             get(
                 ~"root",
                 new(#{
@@ -400,5 +439,30 @@ get_with_args_expansion_test_() ->
             get(root, Container)
         )
     ].
+
+-spec values_expansion_test_() -> [_].
+values_expansion_test_() ->
+    Container = new(#{
+        foo => value(bar),
+        {factory, baz} => factory(fun() -> baz end),
+        {factory, foo} => factory(fun(C) -> {ok, get(foo, C)} end),
+        {factory, sum} => factory(fun(A, B) -> A + B end, [40, 2]),
+        {factory, func_arity_0} => factory(fun func_arity_0/0, []),
+        {factory, func_arity_1} => factory(fun func_arity_1/1, [foo])
+    }),
+    [
+        ?_assertEqual(bar, get(foo, Container)),
+        ?_assertEqual(baz, get({factory, baz}, Container)),
+        ?_assertEqual({ok, bar}, get({factory, foo}, Container)),
+        ?_assertEqual(42, get({factory, sum}, Container)),
+        ?_assertEqual(ok, get({factory, func_arity_0}, Container)),
+        ?_assertEqual({ok, foo}, get({factory, func_arity_1}, Container))
+    ].
+
+func_arity_0() ->
+    ok.
+
+func_arity_1(V) ->
+    {ok, V}.
 
 -endif.
