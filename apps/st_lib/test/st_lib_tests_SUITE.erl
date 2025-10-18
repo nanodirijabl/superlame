@@ -1,4 +1,4 @@
--module(shareware_tests_SUITE).
+-module(st_lib_tests_SUITE).
 
 -export([all/0]).
 -export([groups/0]).
@@ -61,22 +61,22 @@ end_per_testcase(_Name, _C) ->
 %%
 
 -define(one_for_all(Children),
-    shareware:def(supervisor, #{
+    st_lib:def(supervisor, #{
         flags => #{strategy => one_for_all}, children => Children
     })
 ).
--define(worker, shareware:def(gen_server, start_link, [?MODULE, [], []])).
+-define(worker, st_lib:def(gen_server, start_link, [?MODULE, [], []])).
 
 -spec start_tree(config()) -> ok.
 start_tree(_C) ->
-    DI = shareware:new(#{
+    DI = st_lib:new(#{
         ~"sup1" => ?one_for_all([
-            shareware:ref(~"worker"), shareware:ref(~"sup2")
+            st_lib:ref(~"worker"), st_lib:ref(~"sup2")
         ]),
-        ~"sup2" => ?one_for_all([shareware:ref(~"worker")]),
+        ~"sup2" => ?one_for_all([st_lib:ref(~"worker")]),
         ~"worker" => ?worker
     }),
-    {ok, Pid} = shareware_entrypoint:start_link(shareware:get(~"sup1", DI)),
+    {ok, Pid} = st_lib:start_link(st_lib:get(~"sup1", DI)),
     ok = proc_lib:stop(Pid),
     ok.
 
@@ -96,7 +96,7 @@ start_tree_inlined(_C) ->
             ])
         ])
     ]),
-    {ok, Pid} = shareware_entrypoint:start_link(Definition),
+    {ok, Pid} = st_lib:start_link(Definition),
     ok = proc_lib:stop(Pid),
     ok.
 

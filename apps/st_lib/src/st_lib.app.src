@@ -1,4 +1,4 @@
-{application, shareware, [
+{application, st_lib, [
     {description, "An OTP library"},
     {vsn, "0.1.0"},
     {registered, []},

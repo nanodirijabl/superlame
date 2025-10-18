@@ -1,6 +1,8 @@
--module(shareware).
+-module(st_lib).
 
 -include("definitions.hrl").
+
+-export([start_link/1, start_link/2]).
 
 -export([new/0, new/1]).
 -export([set/3]).
@@ -14,47 +16,58 @@
 -type standard_type() ::
     supervisor.
 
+start_link(Definition) ->
+    start_link(Definition, new()).
+
+start_link(?DEFINITION(_, _) = Definition, Container) ->
+    do_start_link(st_definition:expand(undefined, Definition, Container, []));
+start_link(#{start := {_M, _F, _Args}} = Spec, _Container) ->
+    do_start_link(Spec).
+
 new() ->
-    shareware_container:new().
+    st_container:new().
 
 new(Definitions) ->
-    shareware_container:new(Definitions).
+    st_container:new(Definitions).
 
 set(ID, Definition, Container) ->
-    shareware_container:set(ID, Definition, Container).
+    st_container:set(ID, Definition, Container).
 
 get(ID, Container) ->
-    shareware_container:get(ID, Container).
+    st_container:get(ID, Container).
 
--spec factory(shareware_definition_factory:t()) -> shareware_definition:t().
+-spec factory(st_definition_factory:t()) -> st_definition:t().
 factory(Spec) ->
-    shareware_definition:new(shareware_definition_factory, Spec).
+    st_definition:new(st_definition_factory, Spec).
 
--spec factory(function(), [term()]) -> shareware_definition:t().
+-spec factory(function(), [term()]) -> st_definition:t().
 factory(Fun, Args) when is_list(Args) andalso is_function(Fun, length(Args)) ->
-    shareware_definition:new(shareware_definition_factory, {Fun, Args}).
+    st_definition:new(st_definition_factory, {Fun, Args}).
 
--spec value(shareware_definition_term:t()) -> shareware_definition:t().
+-spec value(st_definition_term:t()) -> st_definition:t().
 value(Value) ->
-    shareware_definition:new(shareware_definition_term, Value).
+    st_definition:new(st_definition_term, Value).
 
--spec def(shareware_definition_child_spec:t()) -> shareware_definition:t().
+-spec def(st_definition_child_spec:t()) -> st_definition:t().
 def(Spec) ->
-    shareware_definition:new(shareware_definition_child_spec, Spec).
+    st_definition:new(st_definition_child_spec, Spec).
 
--spec def(standard_type(), shareware_definition_supervisor:t()) ->
-    shareware_definition:t().
+-spec def(standard_type(), st_definition_supervisor:t()) ->
+    st_definition:t().
 def(supervisor, Spec) ->
-    shareware_definition:new(shareware_definition_supervisor, Spec).
+    st_definition:new(st_definition_supervisor, Spec).
 
--spec def(module(), atom(), [term()]) -> shareware_definition:t().
+-spec def(module(), atom(), [term()]) -> st_definition:t().
 def(Mod, Fun, Args) when
     is_atom(Mod) andalso is_atom(Fun) andalso is_list(Args)
 ->
     def(#{start => {Mod, Fun, Args}}).
 
 ref(ID) ->
-    shareware_definition:ref(ID).
+    st_definition:ref(ID).
+
+do_start_link(#{start := {Module, Function, Args}}) ->
+    erlang:apply(Module, Function, Args).
 
 %%
 
@@ -73,25 +86,25 @@ ref(ID) ->
 def_test_() ->
     [
         ?_assertEqual(
-            ?DEFINITION(shareware_definition_child_spec, #{
+            ?DEFINITION(st_definition_child_spec, #{
                 id => test, start => {my_mod, my_fun, []}
             }),
             def(#{id => test, start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            ?DEFINITION(shareware_definition_child_spec, #{
+            ?DEFINITION(st_definition_child_spec, #{
                 start => {my_mod, my_fun, []}
             }),
             def(#{start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            ?DEFINITION(shareware_definition_child_spec, #{
+            ?DEFINITION(st_definition_child_spec, #{
                 start => {my_mod, my_fun, []}
             }),
             def(my_mod, my_fun, [])
         ),
         ?_assertEqual(
-            ?DEFINITION(shareware_definition_supervisor, #{
+            ?DEFINITION(st_definition_supervisor, #{
                 flags => ?sup_flags, children => []
             }),
             def(supervisor, #{flags => ?sup_flags, children => []})
@@ -181,14 +194,14 @@ get_test_() ->
                 type => supervisor,
                 start =>
                     {supervisor, start_link, [
-                        shareware_definition_supervisor,
+                        st_definition_supervisor,
                         {?sup_flags, [
                             #{
                                 id => ~"sup1",
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        shareware_definition_supervisor,
+                                        st_definition_supervisor,
                                         {?sup_flags, []}
                                     ]}
                             },
@@ -197,7 +210,7 @@ get_test_() ->
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        shareware_definition_supervisor,
+                                        st_definition_supervisor,
                                         {?sup_flags, [
                                             #{
                                                 id => ~"worker1",
@@ -208,7 +221,7 @@ get_test_() ->
                                                 type => supervisor,
                                                 start =>
                                                     {supervisor, start_link, [
-                                                        shareware_definition_supervisor,
+                                                        st_definition_supervisor,
                                                         {?sup_flags, []}
                                                     ]}
                                             }

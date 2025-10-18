@@ -1,6 +1,6 @@
--module(shareware_definition_factory).
+-module(st_definition_factory).
 
--behaviour(shareware_definition).
+-behaviour(st_definition).
 -export([new/1]).
 -export([expand/4]).
 
@@ -8,7 +8,7 @@
 
 -type t() ::
     fun(() -> any())
-    | fun((shareware_container:t()) -> any())
+    | fun((st_container:t()) -> any())
     | {function(), [term()]}.
 
 new({Fun, Args} = Spec) when
@@ -30,4 +30,4 @@ expand(_ID, {Fun, Args}, Container, Visited) when
 %%
 
 expand_value(Term, Container, Visited) ->
-    hd(shareware_definition_term:expand_list([Term], Container, Visited)).
+    hd(st_definition_term:expand_list([Term], Container, Visited)).

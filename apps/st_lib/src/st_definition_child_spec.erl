@@ -1,6 +1,6 @@
--module(shareware_definition_child_spec).
+-module(st_definition_child_spec).
 
--behaviour(shareware_definition).
+-behaviour(st_definition).
 -export([new/1]).
 -export([expand/4]).
 
@@ -40,15 +40,11 @@ expand(ID, Spec, Container, Visited) ->
 child_spec_id(_EntryID, #{id := ID}) ->
     ID;
 child_spec_id(undefined, _Spec) ->
-    generate_entry_id();
+    make_ref();
 child_spec_id(EntryID, _Spec) ->
     EntryID.
 
 %%
-
-generate_entry_id() ->
-    {entry, make_ref()}.
-
 expand_start_args(
     #{start := {Module, Function, undefined}}, _Container, _Visited
 ) ->
@@ -57,4 +53,4 @@ expand_start_args(#{start := {Module, Function, Args}}, Container, Visited) when
     is_list(Args)
 ->
     {Module, Function,
-        shareware_definition_term:expand_list(Args, Container, Visited)}.
+        st_definition_term:expand_list(Args, Container, Visited)}.

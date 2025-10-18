@@ -1,4 +1,4 @@
--module(shareware_definition).
+-module(st_definition).
 
 -include("definitions.hrl").
 
@@ -9,30 +9,28 @@
 
 -type ref() :: ?DEFINITION_REF(id()).
 -type id() :: term().
--type t() :: #shareware_definition{}.
+-type t() :: #st_lib_definition{}.
 
 -callback new(raw_definition()) -> raw_definition().
 -callback expand(
     id(),
     raw_definition(),
-    shareware_container:t(),
-    [shareware_definition:id()]
+    st_container:t(),
+    [st_definition:id()]
 ) ->
-    shareware_container:entry() | no_return().
+    st_container:entry() | no_return().
 
 -spec new(module(), raw_definition()) -> t().
 new(Mod, Value) ->
-    #shareware_definition{module = Mod, value = Mod:new(Value)}.
+    ?DEFINITION(Mod, Mod:new(Value)).
 
 -spec ref(id()) -> ref().
 ref(ID) ->
     ?DEFINITION_REF(ID).
 
--spec expand(id(), t(), shareware_container:t(), [id()]) ->
-    shareware_container:entry() | no_return().
-expand(
-    ID, #shareware_definition{module = Mod, value = Value}, Container, Visited
-) ->
+-spec expand(id(), t(), st_container:t(), [id()]) ->
+    st_container:entry() | no_return().
+expand(ID, ?DEFINITION(Mod, Value), Container, Visited) ->
     try
         Mod:expand(ID, Value, Container, Visited)
     catch
