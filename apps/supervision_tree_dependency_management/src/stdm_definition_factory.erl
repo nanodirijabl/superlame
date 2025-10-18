@@ -1,6 +1,6 @@
--module(st_definition_factory).
+-module(stdm_definition_factory).
 
--behaviour(st_definition).
+-behaviour(stdm_definition).
 -export([new/1]).
 -export([expand/4]).
 
@@ -8,7 +8,7 @@
 
 -type t() ::
     fun(() -> any())
-    | fun((st_container:t()) -> any())
+    | fun((stdm_container:t()) -> any())
     | {function(), [term()]}.
 
 new({Fun, Args} = Spec) when
@@ -30,4 +30,4 @@ expand(_ID, {Fun, Args}, Container, Visited) when
 %%
 
 expand_value(Term, Container, Visited) ->
-    hd(st_definition_term:expand_list([Term], Container, Visited)).
+    hd(stdm_definition_term:expand_list([Term], Container, Visited)).

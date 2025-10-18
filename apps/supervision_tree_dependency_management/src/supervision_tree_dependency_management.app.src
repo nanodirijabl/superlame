@@ -1,5 +1,5 @@
-{application, st_lib, [
-    {description, "An OTP library"},
+{application, supervision_tree_dependency_management, [
+    {description, "A supervision tree dependecy management library for OTP"},
     {vsn, "0.1.0"},
     {registered, []},
     {applications, [

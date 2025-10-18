@@ -1,10 +1,10 @@
--module(st_definition_term).
+-module(stdm_definition_term).
 
 -include("definitions.hrl").
 
 -export([expand_list/3]).
 
--behaviour(st_definition).
+-behaviour(stdm_definition).
 -export([new/1]).
 -export([expand/4]).
 
@@ -30,7 +30,7 @@ expand_list(Args, Container, Visited) when is_list(Args) ->
         (?DEFINITION_REF(ID)) ->
             lists:member(ID, Visited) andalso
                 erlang:throw({circular_reference_found, ID, Visited}),
-            st_container:get(ID, Container, Visited);
+            stdm_container:get(ID, Container, Visited);
         (V0) when is_map(V0) ->
             {Keys, V1} = lists:unzip(maps:to_list(V0)),
             V2 = expand_list(V1, Container, Visited),

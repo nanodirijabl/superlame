@@ -1,6 +1,6 @@
--module(st_definition_child_spec).
+-module(stdm_definition_child_spec).
 
--behaviour(st_definition).
+-behaviour(stdm_definition).
 -export([new/1]).
 -export([expand/4]).
 
@@ -53,4 +53,4 @@ expand_start_args(#{start := {Module, Function, Args}}, Container, Visited) when
     is_list(Args)
 ->
     {Module, Function,
-        st_definition_term:expand_list(Args, Container, Visited)}.
+        stdm_definition_term:expand_list(Args, Container, Visited)}.

@@ -10,11 +10,11 @@
 -export([init/2, terminate/3]).
 
 start(_StartType, _StartArgs) ->
-    st_lib:start_link(
-        st_lib:def(supervisor, #{
+    stdm:start_link(
+        stdm:def(supervisor, #{
             flags => #{strategy => one_for_all},
             children => [
-                st_lib:def(gen_server, start_link, [
+                stdm:def(gen_server, start_link, [
                     {local, bings_accountant}, ?MODULE, [], []
                 ]),
                 ranch:child_spec(

@@ -1,4 +1,4 @@
--module(st_lib).
+-module(stdm).
 
 -include("definitions.hrl").
 
@@ -20,51 +20,51 @@ start_link(Definition) ->
     start_link(Definition, new()).
 
 start_link(?DEFINITION(_, _) = Definition, Container) ->
-    do_start_link(st_definition:expand(undefined, Definition, Container, []));
+    do_start_link(stdm_definition:expand(undefined, Definition, Container, []));
 start_link(#{start := {_M, _F, _Args}} = Spec, _Container) ->
     do_start_link(Spec).
 
 new() ->
-    st_container:new().
+    stdm_container:new().
 
 new(Definitions) ->
-    st_container:new(Definitions).
+    stdm_container:new(Definitions).
 
 set(ID, Definition, Container) ->
-    st_container:set(ID, Definition, Container).
+    stdm_container:set(ID, Definition, Container).
 
 get(ID, Container) ->
-    st_container:get(ID, Container).
+    stdm_container:get(ID, Container).
 
--spec factory(st_definition_factory:t()) -> st_definition:t().
+-spec factory(stdm_definition_factory:t()) -> stdm_definition:t().
 factory(Spec) ->
-    st_definition:new(st_definition_factory, Spec).
+    stdm_definition:new(stdm_definition_factory, Spec).
 
--spec factory(function(), [term()]) -> st_definition:t().
+-spec factory(function(), [term()]) -> stdm_definition:t().
 factory(Fun, Args) when is_list(Args) andalso is_function(Fun, length(Args)) ->
-    st_definition:new(st_definition_factory, {Fun, Args}).
+    stdm_definition:new(stdm_definition_factory, {Fun, Args}).
 
--spec value(st_definition_term:t()) -> st_definition:t().
+-spec value(stdm_definition_term:t()) -> stdm_definition:t().
 value(Value) ->
-    st_definition:new(st_definition_term, Value).
+    stdm_definition:new(stdm_definition_term, Value).
 
--spec def(st_definition_child_spec:t()) -> st_definition:t().
+-spec def(stdm_definition_child_spec:t()) -> stdm_definition:t().
 def(Spec) ->
-    st_definition:new(st_definition_child_spec, Spec).
+    stdm_definition:new(stdm_definition_child_spec, Spec).
 
--spec def(standard_type(), st_definition_supervisor:t()) ->
-    st_definition:t().
+-spec def(standard_type(), stdm_definition_supervisor:t()) ->
+    stdm_definition:t().
 def(supervisor, Spec) ->
-    st_definition:new(st_definition_supervisor, Spec).
+    stdm_definition:new(stdm_definition_supervisor, Spec).
 
--spec def(module(), atom(), [term()]) -> st_definition:t().
+-spec def(module(), atom(), [term()]) -> stdm_definition:t().
 def(Mod, Fun, Args) when
     is_atom(Mod) andalso is_atom(Fun) andalso is_list(Args)
 ->
     def(#{start => {Mod, Fun, Args}}).
 
 ref(ID) ->
-    st_definition:ref(ID).
+    stdm_definition:ref(ID).
 
 do_start_link(#{start := {Module, Function, Args}}) ->
     erlang:apply(Module, Function, Args).
@@ -86,25 +86,25 @@ do_start_link(#{start := {Module, Function, Args}}) ->
 def_test_() ->
     [
         ?_assertEqual(
-            ?DEFINITION(st_definition_child_spec, #{
+            ?DEFINITION(stdm_definition_child_spec, #{
                 id => test, start => {my_mod, my_fun, []}
             }),
             def(#{id => test, start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            ?DEFINITION(st_definition_child_spec, #{
+            ?DEFINITION(stdm_definition_child_spec, #{
                 start => {my_mod, my_fun, []}
             }),
             def(#{start => {my_mod, my_fun, []}})
         ),
         ?_assertEqual(
-            ?DEFINITION(st_definition_child_spec, #{
+            ?DEFINITION(stdm_definition_child_spec, #{
                 start => {my_mod, my_fun, []}
             }),
             def(my_mod, my_fun, [])
         ),
         ?_assertEqual(
-            ?DEFINITION(st_definition_supervisor, #{
+            ?DEFINITION(stdm_definition_supervisor, #{
                 flags => ?sup_flags, children => []
             }),
             def(supervisor, #{flags => ?sup_flags, children => []})
@@ -194,14 +194,14 @@ get_test_() ->
                 type => supervisor,
                 start =>
                     {supervisor, start_link, [
-                        st_definition_supervisor,
+                        stdm_definition_supervisor,
                         {?sup_flags, [
                             #{
                                 id => ~"sup1",
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        st_definition_supervisor,
+                                        stdm_definition_supervisor,
                                         {?sup_flags, []}
                                     ]}
                             },
@@ -210,7 +210,7 @@ get_test_() ->
                                 type => supervisor,
                                 start =>
                                     {supervisor, start_link, [
-                                        st_definition_supervisor,
+                                        stdm_definition_supervisor,
                                         {?sup_flags, [
                                             #{
                                                 id => ~"worker1",
@@ -221,7 +221,7 @@ get_test_() ->
                                                 type => supervisor,
                                                 start =>
                                                     {supervisor, start_link, [
-                                                        st_definition_supervisor,
+                                                        stdm_definition_supervisor,
                                                         {?sup_flags, []}
                                                     ]}
                                             }

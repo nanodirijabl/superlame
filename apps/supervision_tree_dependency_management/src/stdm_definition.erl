@@ -1,4 +1,4 @@
--module(st_definition).
+-module(stdm_definition).
 
 -include("definitions.hrl").
 
@@ -9,16 +9,16 @@
 
 -type ref() :: ?DEFINITION_REF(id()).
 -type id() :: term().
--type t() :: #st_lib_definition{}.
+-type t() :: #stdm_definition{}.
 
 -callback new(raw_definition()) -> raw_definition().
 -callback expand(
     id(),
     raw_definition(),
-    st_container:t(),
-    [st_definition:id()]
+    stdm_container:t(),
+    [stdm_definition:id()]
 ) ->
-    st_container:entry() | no_return().
+    stdm_container:entry() | no_return().
 
 -spec new(module(), raw_definition()) -> t().
 new(Mod, Value) ->
@@ -28,8 +28,8 @@ new(Mod, Value) ->
 ref(ID) ->
     ?DEFINITION_REF(ID).
 
--spec expand(id(), t(), st_container:t(), [id()]) ->
-    st_container:entry() | no_return().
+-spec expand(id(), t(), stdm_container:t(), [id()]) ->
+    stdm_container:entry() | no_return().
 expand(ID, ?DEFINITION(Mod, Value), Container, Visited) ->
     try
         Mod:expand(ID, Value, Container, Visited)
