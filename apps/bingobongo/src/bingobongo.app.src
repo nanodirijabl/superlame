@@ -5,7 +5,7 @@
     {applications, [
         kernel,
         stdlib,
-        shareware,
+        supervision_tree_dependency_management,
         cowboy
     ]},
     {mod, {bingobongo, []}},

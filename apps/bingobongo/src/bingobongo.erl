@@ -9,29 +9,25 @@
 -behaviour(cowboy_handler).
 -export([init/2, terminate/3]).
 
--define(supervise(Children),
-    shareware:def(supervisor, {#{strategy => one_for_all}, Children})
-).
--define(bings_accountant,
-    shareware:def(gen_server, start_link, [
-        {local, bings_accountant}, ?MODULE, [], []
-    ])
-).
-
 start(_StartType, _StartArgs) ->
-    shareware_entrypoint:start_link(
-        ?supervise([
-            ?bings_accountant,
-            ranch:child_spec(
-                ?MODULE, ranch_tcp, [{port, 8080}], cowboy_clear, #{
-                    env => #{
-                        dispatch => cowboy_router:compile([
-                            {'_', [{"/bing", ?MODULE, #{counter => 0}}]}
-                        ])
+    stdm:start_link(
+        stdm:def(supervisor, #{
+            flags => #{strategy => one_for_all},
+            children => [
+                stdm:def(gen_server, start_link, [
+                    {local, bings_accountant}, ?MODULE, [], []
+                ]),
+                ranch:child_spec(
+                    ?MODULE, ranch_tcp, [{port, 8080}], cowboy_clear, #{
+                        env => #{
+                            dispatch => cowboy_router:compile([
+                                {'_', [{"/bing", ?MODULE, #{counter => 0}}]}
+                            ])
+                        }
                     }
-                }
-            )
-        ])
+                )
+            ]
+        })
     ).
 
 stop(_State) ->

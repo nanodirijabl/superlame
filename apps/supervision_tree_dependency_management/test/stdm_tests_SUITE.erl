@@ -1,4 +1,4 @@
--module(shareware_tests_SUITE).
+-module(stdm_tests_SUITE).
 
 -export([all/0]).
 -export([groups/0]).
@@ -9,7 +9,7 @@
 
 -type config() :: [{atom(), term()}].
 -type group_name() :: atom().
--type test_case_name() :: atom().
+-type testdm_case_name() :: atom().
 
 %%
 
@@ -27,13 +27,13 @@
 
 %%
 
--spec all() -> [test_case_name() | {group, group_name()}].
+-spec all() -> [testdm_case_name() | {group, group_name()}].
 all() ->
     [
         {group, main}
     ].
 
--spec groups() -> [{group_name(), list(), [test_case_name()]}].
+-spec groups() -> [{group_name(), list(), [testdm_case_name()]}].
 groups() ->
     [
         {main, [parallel], [
@@ -61,22 +61,22 @@ end_per_testcase(_Name, _C) ->
 %%
 
 -define(one_for_all(Children),
-    shareware:def(supervisor, {#{strategy => one_for_all}, Children})
+    stdm:def(supervisor, #{
+        flags => #{strategy => one_for_all}, children => Children
+    })
 ).
--define(worker, shareware:def(gen_server, start_link, [?MODULE, [], []])).
+-define(worker, stdm:def(gen_server, start_link, [?MODULE, [], []])).
 
 -spec start_tree(config()) -> ok.
 start_tree(_C) ->
-    DI = shareware:new(#{
+    DI = stdm:new(#{
         ~"sup1" => ?one_for_all([
-            shareware:ref(~"worker"), shareware:ref(~"sup2")
+            stdm:ref(~"worker"), stdm:ref(~"sup2")
         ]),
-        ~"sup2" => ?one_for_all([shareware:ref(~"worker")]),
+        ~"sup2" => ?one_for_all([stdm:ref(~"worker")]),
         ~"worker" => ?worker
     }),
-    {ok, Pid} = shareware_entrypoint:start_link(
-        {'$child_spec', shareware:get(~"sup1", DI)}
-    ),
+    {ok, Pid} = stdm:start_link(stdm:get(~"sup1", DI)),
     ok = proc_lib:stop(Pid),
     ok.
 
@@ -96,7 +96,7 @@ start_tree_inlined(_C) ->
             ])
         ])
     ]),
-    {ok, Pid} = shareware_entrypoint:start_link(Definition),
+    {ok, Pid} = stdm:start_link(Definition),
     ok = proc_lib:stop(Pid),
     ok.
 
