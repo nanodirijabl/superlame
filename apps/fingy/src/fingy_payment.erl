@@ -1,8 +1,13 @@
 -module(fingy_payment).
 
--behaviour(goofy).
+-behaviour(goofy_entity).
+-export([handle_command/4]).
 
--export([handle_command/4, apply_event/2]).
+-behaviour(goofy_projector).
+-export([apply_event/2]).
+
+-behaviour(goofy_commander).
+-export([command/2]).
 
 -export_type([payer/0]).
 -export_type([merchant/0]).
@@ -10,7 +15,7 @@
 -type opts() :: #{
     fingy_accounter := module(),
     fingy_config := module(),
-    fingy_provder := module()
+    fingy_provider := module()
 }.
 
 -type id() :: binary().
@@ -22,7 +27,7 @@
     money:t()
 }.
 
--record(provider_session, {
+-record(session, {
     id :: binary(),
     status :: pending | complete | {failed, Reason :: term()},
     transaction :: undefined | fingy_provider:transaction()
@@ -36,10 +41,10 @@
     amount :: money:t(),
     route :: undefined | #route{},
     cash_flow :: undefined | nonempty_list(change()),
-    sessions :: [#provider_session{}]
+    sessions :: [#session{}]
 }).
 
--record(start_command, {
+-record(start_payment_command, {
     id :: id(),
     payer :: payer(),
     merchant :: merchant(),
@@ -72,10 +77,12 @@
 -record(capture_payment_command, {}).
 -record(payment_completed_event, {}).
 
--spec handle_command(tuple(), undefined | #payment{}, opts(), goofy:context()) ->
+-spec handle_command(
+    tuple(), undefined | #payment{}, opts(), goofy_context:t()
+) ->
     {ok, [tuple()]} | {error, term()}.
 handle_command(
-    #start_command{
+    #start_payment_command{
         id = ID,
         payer = Payer,
         merchant = Merchant,
@@ -131,12 +138,13 @@ handle_command(
     #payment{
         id = PaymentID,
         status = pending,
-        sessions =
-            [#provider_session{status = LatestSessionStatus} | _] = Sessions
+        sessions = Sessions
     },
     _Opts,
     _Context
-) when LatestSessionStatus =/= pending ->
+) when
+    length(Sessions) =:= 0 orelse (hd(Sessions))#session.status =/= pending
+->
     SessionID =
         <<PaymentID/binary, "/",
             (integer_to_binary(length(Sessions) + 1))/binary>>,
@@ -148,7 +156,7 @@ handle_command(
         payer = Payer,
         amount = Amount,
         route = #route{provider = ProviderID},
-        sessions = [#provider_session{status = pending} | _]
+        sessions = [#session{status = pending} | _]
     },
     Opts,
     _Context
@@ -167,7 +175,7 @@ handle_command(
     #payment{
         status = pending,
         sessions = [
-            #provider_session{status = pending, transaction = Transaction} | _
+            #session{status = pending, transaction = Transaction} | _
         ]
     },
     Opts,
@@ -184,7 +192,7 @@ handle_command(
     #capture_payment_command{},
     #payment{
         status = pending,
-        sessions = [#provider_session{status = complete} | _]
+        sessions = [#session{status = complete} | _]
     },
     _Opts,
     _Context
@@ -222,7 +230,7 @@ apply_event(
 ) ->
     {ok, Payment#payment{
         sessions = [
-            #provider_session{
+            #session{
                 id = SessionID,
                 status = pending,
                 transaction = undefined
@@ -236,7 +244,7 @@ apply_event(
 ) ->
     {ok, Payment#payment{
         sessions = [
-            LatestSession#provider_session{transaction = Transaction} | Sessions
+            LatestSession#session{transaction = Transaction} | Sessions
         ]
     }};
 apply_event(
@@ -245,7 +253,7 @@ apply_event(
 ) ->
     {ok, Payment#payment{
         sessions = [
-            LatestSession#provider_session{status = complete} | Sessions
+            LatestSession#session{status = complete} | Sessions
         ]
     }};
 apply_event(
@@ -254,7 +262,7 @@ apply_event(
 ) ->
     {ok, Payment#payment{
         sessions = [
-            LatestSession#provider_session{status = {failed, Reason}} | Sessions
+            LatestSession#session{status = {failed, Reason}} | Sessions
         ]
     }};
 apply_event(#payment_failed_event{reason = Reason}, Payment) ->
@@ -263,3 +271,91 @@ apply_event(#payment_completed_event{}, Payment) ->
     {ok, Payment#payment{status = complete}};
 apply_event(Event, #payment{} = Payment) ->
     {error, {unexpected, Event, Payment}}.
+
+command(_Payment, _Context) ->
+    {ok, undefined}.
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-spec test() -> _.
+
+-spec payment_lifecycle_test_() -> [_].
+payment_lifecycle_test_() ->
+    Opts = #{
+        fingy_accounter => fingy_accounter_stupid,
+        fingy_config => fingy_config_stupid,
+        fingy_provider => fingy_provider_stupid
+    },
+    Context = goofy_context:new(~"payment", ~"1", goofy_util:unique()),
+    {Payment, _} = lists:foldl(
+        fun(Command, {P0, Ctx0}) ->
+            Ctx1 = goofy_context:with_causation(goofy_util:unique(), Ctx0),
+            case handle_command(Command, P0, Opts, Ctx1) of
+                {ok, Events} ->
+                    P1 = lists:foldl(
+                        fun(Event, Acc0) ->
+                            case apply_event(Event, Acc0) of
+                                {ok, Acc1} ->
+                                    Acc1;
+                                {error, Reason} ->
+                                    erlang:throw({event, {error, Reason}})
+                            end
+                        end,
+                        P0,
+                        Events
+                    ),
+                    {P1, Ctx1};
+                {error, Reason} ->
+                    erlang:throw({command, {error, Reason}})
+            end
+        end,
+        {undefined,
+            goofy_context:with_idempotency(goofy_util:unique(), Context)},
+        [
+            #start_payment_command{
+                id = ~"payment-1",
+                payer = ~"payer",
+                merchant = ~"merchant",
+                amount = {100, ~"RUB"}
+            },
+            #find_route_command{},
+            #calculate_cash_flow_command{},
+            #start_session_command{},
+            #bind_session_command{},
+            #process_session_command{},
+            #capture_payment_command{}
+        ]
+    ),
+    [
+        ?_assertEqual(
+            #payment{
+                id = ~"payment-1",
+                status = complete,
+                payer = ~"payer",
+                merchant = ~"merchant",
+                amount = money:'RUB'(100),
+                route = #route{provider = ~"merchant_provider"},
+                cash_flow = [
+                    {
+                        ~"payer_account",
+                        ~"merchant_provider_account",
+                        money:'RUB'(100)
+                    }
+                ],
+                sessions = [
+                    #session{
+                        id = ~"payment-1/1",
+                        status = complete,
+                        transaction = {
+                            ~"payer/merchant_provider/100/RUB",
+                            ~"stupid transaction's stupid details"
+                        }
+                    }
+                ]
+            },
+            Payment
+        )
+    ].
+
+-endif.
