@@ -1,0 +1,14 @@
+{application, fingy, [
+    {description, "A goofy financial transaction processing domain ruleset"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        goofy
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.
