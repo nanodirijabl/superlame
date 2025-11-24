@@ -1,10 +1,8 @@
 -module(money).
 
+-include_lib("omni/include/payment_pb.hrl").
+
 -export(['RUB'/1]).
 
--export_type([t/0]).
-
--type t() :: {Amount :: non_neg_integer(), CurrencyCode :: binary()}.
-
 'RUB'(Amount) ->
-    {Amount, ~"RUB"}.
+    #'Money'{amount = Amount, currency = ?FUNCTION_NAME}.

@@ -3,19 +3,16 @@
 -export([bind_transaction/4]).
 -export([process_transaction/2]).
 
--export_type([id/0]).
--export_type([transaction/0]).
+-callback bind_transaction(
+    payment_pb:'PayerID'(), payment_pb:'ProviderID'(), payment_pb:'Money'()
+) ->
+    {ok, payment_pb:'SessionTransaction'()} | {error, Reason :: term()}.
 
--type id() :: binary().
--type transaction() :: {TransactionID :: binary(), Details :: term()}.
+-callback process_transaction(payment_pb:'SessionTransaction'()) ->
+    ok | {error, Reason :: term()}.
 
--callback bind_transaction(fingy_payment:payer(), id(), money:t()) ->
-    {ok, transaction()} | {error, Reason :: term()}.
-
--callback process_transaction(transaction()) -> ok | {error, Reason :: term()}.
-
-bind_transaction(Mod, Payer, ProviderID, Amount) ->
-    Mod:bind_transaction(Payer, ProviderID, Amount).
+bind_transaction(Mod, PayerID, ProviderID, Amount) ->
+    Mod:bind_transaction(PayerID, ProviderID, Amount).
 
 process_transaction(Mod, Transaction) ->
     Mod:process_transaction(Transaction).

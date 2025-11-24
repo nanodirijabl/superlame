@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+package payment;
+
+message ProviderID {
+  string value = 1;
+}
+
+message PendingStatus {}
+
+message CompleteStatus {}
+
+message FailedStatus {
+  string reason = 1;
+}
+
+message SessionTransaction {
+  string id = 1;
+  string details = 2;
+}
+
+message Session {
+  string id = 1;
+  oneof status {
+    PendingStatus pending = 2;
+    CompleteStatus complete = 3;
+    FailedStatus failed = 4;
+  }
+  SessionTransaction transaction = 5;
+}
+
+message Route {
+  ProviderID provider = 1;
+}
+
+message PayerID {
+  string value = 1;
+}
+
+message MerchantID {
+  string value = 1;
+}
+
+enum Currency {
+  RUB = 1;
+}
+
+message Money {
+  uint64 amount = 1;
+  Currency currency = 2;
+}
+
+message AccountID {
+  string value = 1;
+}
+
+message CashFlowPosting {
+  AccountID source = 1;
+  AccountID destination = 2;
+  Money amount = 3;
+}
+
+message CashFlow {
+  repeated CashFlowPosting postings = 1;
+}
+
+message Payment {
+  string id = 1;
+  oneof status {
+    PendingStatus pending = 2;
+    CompleteStatus complete = 3;
+    FailedStatus failed = 4;
+  }
+  PayerID payer = 5;
+  MerchantID merchant = 6;
+  Money amount = 7;
+  Route route = 8;
+  CashFlow cash_flow = 9;
+  repeated Session sessions = 10;
+}
+
+message BaseCommand {}
+
+message BaseEvent {}
+
+message StartPaymentCommand {
+  string payment_id = 1;
+  PayerID payer = 2;
+  MerchantID merchant = 3;
+  Money amount = 4;
+}
+
+message PaymentStartedEvent {
+  string payment_id = 1;
+  PayerID payer = 2;
+  MerchantID merchant = 3;
+  Money amount = 4;
+}
+
+message FindRouteCommand {
+  BaseCommand command = 1;
+}
+
+message RouteFoundEvent {
+  BaseEvent event = 1;
+  Route route = 2;
+}
+
+message PaymentFailedEvent {
+  BaseEvent event = 1;
+  string reason = 2;
+}
+
+message CalculateCashFlowCommand {
+  BaseCommand command = 1;
+}
+
+message CashFlowCalculatedEvent {
+  BaseEvent event = 1;
+  CashFlow cash_flow = 2;
+}
+
+message StartSessionCommand {
+  BaseCommand command = 1;
+}
+
+message SessionStartedEvent {
+  BaseEvent event = 1;
+  string session_id = 2;
+}
+
+message BindSessionCommand {
+  BaseCommand command = 1;
+}
+
+message SessionBoundEvent {
+  BaseEvent event = 1;
+  SessionTransaction transaction = 2;
+}
+
+message SessionFailedEvent {
+  BaseEvent event = 1;
+  string reason = 2;
+}
+
+message ProcessSessionCommand {
+  BaseCommand command = 1;
+}
+
+message SessionProcessedEvent {
+  BaseEvent event = 1;
+}
+
+message CapturePaymentCommand {
+  BaseCommand command = 1;
+}
+
+message PaymentCompletedEvent {
+  BaseEvent event = 1;
+}
