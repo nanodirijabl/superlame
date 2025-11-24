@@ -9,6 +9,21 @@
 -behaviour(goofy_commander).
 -export([command/2]).
 
+-ifdef(TEST).
+
+-behaviour(fingy_provider).
+-export([bind_transaction/3]).
+-export([process_transaction/1]).
+
+-behaviour(fingy_config).
+-export([find_provider_for_merchant/1]).
+
+-behaviour(fingy_accounter).
+-export([get_payer_account/1]).
+-export([get_provider_account/1]).
+
+-endif.
+
 -export_type([payer/0]).
 -export_type([merchant/0]).
 
@@ -283,9 +298,9 @@ command(_Payment, _Context) ->
 -spec payment_lifecycle_test_() -> [_].
 payment_lifecycle_test_() ->
     Opts = #{
-        fingy_accounter => fingy_accounter_stupid,
-        fingy_config => fingy_config_stupid,
-        fingy_provider => fingy_provider_stupid
+        fingy_accounter => ?MODULE,
+        fingy_config => ?MODULE,
+        fingy_provider => ?MODULE
     },
     Context = goofy_context:new(~"payment", ~"1", goofy_util:unique()),
     {Payment, _} = lists:foldl(
@@ -357,5 +372,26 @@ payment_lifecycle_test_() ->
             Payment
         )
     ].
+
+%% Callback implementations
+
+bind_transaction(Payer, ProviderID, {Amount, Currency}) ->
+    {ok, {
+        <<Payer/binary, "/", ProviderID/binary, "/",
+            (integer_to_binary(Amount))/binary, "/", Currency/binary>>,
+        ~"stupid transaction's stupid details"
+    }}.
+
+process_transaction(_Transaction) ->
+    ok.
+
+find_provider_for_merchant(Merchant) ->
+    {ok, <<Merchant/binary, "_provider">>}.
+
+get_payer_account(Payer) ->
+    <<Payer/binary, "_account">>.
+
+get_provider_account(Provider) ->
+    <<Provider/binary, "_account">>.
 
 -endif.
