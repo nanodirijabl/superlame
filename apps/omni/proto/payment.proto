@@ -1,0 +1,161 @@
+syntax = "proto3";
+
+package payment;
+
+message ProviderID {
+  optional string value = 1;
+}
+
+message PendingStatus {}
+
+message CompleteStatus {}
+
+message FailedStatus {
+  optional string reason = 1;
+}
+
+message SessionTransaction {
+  optional string id = 1;
+
+  optional string details = 2;
+}
+
+message Session {
+  optional string id = 1;
+  oneof status {
+    PendingStatus pending = 2;
+    CompleteStatus complete = 3;
+    FailedStatus failed = 4;
+  }
+  optional SessionTransaction transaction = 5;
+}
+
+message Route {
+  optional ProviderID provider = 1;
+}
+
+message PayerID {
+  optional string value = 1;
+}
+
+message MerchantID {
+  optional string value = 1;
+}
+
+enum Currency {
+  RUB = 1;
+}
+
+message Money {
+  optional uint64 amount = 1;
+  optional Currency currency = 2;
+}
+
+message AccountID {
+  optional string value = 1;
+}
+
+message CashFlowPosting {
+  optional AccountID source = 1;
+  optional AccountID destination = 2;
+  optional Money amount = 3;
+}
+
+message CashFlow {
+  repeated CashFlowPosting postings = 1;
+}
+
+message Payment {
+  optional string id = 1;
+  oneof status {
+    PendingStatus pending = 2;
+    CompleteStatus complete = 3;
+    FailedStatus failed = 4;
+  }
+  optional PayerID payer = 5;
+  optional MerchantID merchant = 6;
+  optional Money amount = 7;
+  optional Route route = 8;
+  optional CashFlow cash_flow = 9;
+  repeated Session sessions = 10;
+}
+
+message BaseCommand {}
+
+message BaseEvent {}
+
+message StartPaymentCommand {
+  optional string payment_id = 1;
+  optional PayerID payer = 2;
+  optional MerchantID merchant = 3;
+  optional Money amount = 4;
+}
+
+message PaymentStartedEvent {
+  optional string payment_id = 1;
+  optional PayerID payer = 2;
+  optional MerchantID merchant = 3;
+  optional Money amount = 4;
+}
+
+message FindRouteCommand {
+  optional BaseCommand command = 1;
+}
+
+message RouteFoundEvent {
+  optional BaseEvent event = 1;
+  optional Route route = 2;
+}
+
+message PaymentFailedEvent {
+  optional BaseEvent event = 1;
+  optional string reason = 2;
+}
+
+message CalculateCashFlowCommand {
+  optional BaseCommand command = 1;
+}
+
+message CashFlowCalculatedEvent {
+  optional BaseEvent event = 1;
+  optional CashFlow cash_flow = 2;
+}
+
+message StartSessionCommand {
+  optional BaseCommand command = 1;
+}
+
+message SessionStartedEvent {
+  optional BaseEvent event = 1;
+  optional string session_id = 2;
+}
+
+message BindSessionCommand {
+  optional BaseCommand command = 1;
+}
+
+message SessionBoundEvent {
+  optional BaseEvent event = 1;
+  optional SessionTransaction transaction = 2;
+}
+
+message SessionFailedEvent {
+  optional BaseEvent event = 1;
+  optional string reason = 2;
+}
+
+message ProcessSessionCommand {
+  optional BaseCommand command = 1;
+}
+
+message SessionProcessedEvent {
+  optional BaseEvent event = 1;
+}
+
+message CapturePaymentCommand {
+  optional BaseCommand command = 1;
+}
+
+message PaymentCompletedEvent {
+  optional BaseEvent event = 1;
+}

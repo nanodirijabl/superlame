@@ -11,7 +11,7 @@ COPY rebar.lock /build/
 RUN rebar3 get-deps
 
 COPY . /build/
-RUN rebar3 release
+RUN rebar3 release --all
 
 FROM docker.io/library/erlang:${OTP_VERSION}-slim
 
